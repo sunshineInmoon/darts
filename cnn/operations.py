@@ -87,7 +87,10 @@ class Zero(nn.Module):
     return x[:,:,::self.stride,::self.stride].mul(0.)
 
 
-class FactorizedReduce(nn.Module):
+class FactorizedReduce(nn.Module): #分解降维
+  ‘’‘
+  将输入分成两支，每一支输出的Channels是最终我们想要的1/2,然后再将两者cat起来。
+  ’‘’
 
   def __init__(self, C_in, C_out, affine=True):
     super(FactorizedReduce, self).__init__()
@@ -99,7 +102,7 @@ class FactorizedReduce(nn.Module):
 
   def forward(self, x):
     x = self.relu(x)
-    out = torch.cat([self.conv_1(x), self.conv_2(x[:,:,1:,1:])], dim=1)
+    out = torch.cat([self.conv_1(x), self.conv_2(x[:,:,1:,1:])], dim=1) #为什么conv_2的输入H，W从1开始呢？这不是会造成维度不一致，怎么连接呢？
     out = self.bn(out)
     return out
 
