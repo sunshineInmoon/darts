@@ -68,9 +68,9 @@ class Network(nn.Module):
     super(Network, self).__init__()
     self._C = C # 16
     self._num_classes = num_classes # 10
-    self._layers = layers # 8
+    self._layers = layers # 8 Net中有个8个Cell
     self._criterion = criterion# 交叉熵
-    self._steps = steps # 4
+    self._steps = steps # 4 一个cell中有4个计算Node
     self._multiplier = multiplier # 4
 
     # 网络的head是固定的不用搜索，输入3Channels的彩色图，输出3*16=48Channels的feature map
@@ -124,10 +124,10 @@ class Network(nn.Module):
     return self._criterion(logits, target) # 计算最终的交叉熵loss
 
   def _initialize_alphas(self): #初始化一个Cell的architecture parameters
-    k = sum(1 for i in range(self._steps) for n in range(2+i)) #所有cell中所有path条数
+    k = sum(1 for i in range(self._steps) for n in range(2+i)) #所有cell中所有path条数, self._steps=4, k=14
     num_ops = len(PRIMITIVES) # 候选操作数量，一条path上；有num_ops个操作，因此architecture parameters是个k*num_ops的矩阵
 
-    self.alphas_normal = Variable(1e-3*torch.randn(k, num_ops).cuda(), requires_grad=True) # normal cell使用
+    self.alphas_normal = Variable(1e-3*torch.randn(k, num_ops).cuda(), requires_grad=True) # normal cell使用, 矩阵中每一行代表一条path，每一列代表一个path上的一个op的权重
     self.alphas_reduce = Variable(1e-3*torch.randn(k, num_ops).cuda(), requires_grad=True) # reduce cell使用
     self._arch_parameters = [
       self.alphas_normal,
@@ -139,29 +139,35 @@ class Network(nn.Module):
 
   def genotype(self): #按照概率挑选最佳op
 
-    def _parse(weights):
+    def _parse(weights): #操作范围还是在一个cell中
       gene = []
-      n = 2
+      n = 2 #两个输入Node
       start = 0
       for i in range(self._steps): #self._steps=4,从这个参数可以看出这是对一个cell进行的操作
         end = start + n
-        W = weights[start:end].copy()
-        edges = sorted(range(i + 2), key=lambda x: -max(W[x][k] for k in range(len(W[x])) if k != PRIMITIVES.index('none')))[:2]
-        for j in edges:
+        W = weights[start:end].copy() #一个cell中所有path组成一个矩阵，取出对应path的权重
+        # 每个Node的输入是前面所有Node输出（包括两个输入Node），下面的作用是从所有输入path中找到两条包含最大概率op的path，具体分析如下
+        # 可以看到排序的主体是range(i + 2)
+        # 注意lambda表达式，出入的参数x in range(i + 2)
+        # W[x][k] for k in range(len(W[x])) 遍历矩阵W第x行，实际上是在遍历第x条path上的op权重，找出权重最大的op，max()前之所以加“-”
+        # ；因为sorted函数默认升序排序，这样可以使拥有最大权重op的path排在前面
+        # 注意最后的[:2]选择了两个最大的path
+        edges = sorted(range(i + 2), key=lambda x: -max(W[x][k] for k in range(len(W[x])) if k != PRIMITIVES.index('none')))[:2] 
+        for j in edges: #遍历我们选择的两个拥有最大权重op的path
           k_best = None
-          for k in range(len(W[j])):
+          for k in range(len(W[j])): #遍历每条path上的op的权重
             if k != PRIMITIVES.index('none'):
               if k_best is None or W[j][k] > W[j][k_best]:
-                k_best = k
-          gene.append((PRIMITIVES[k_best], j))
-        start = end
-        n += 1
-      return gene
+                k_best = k #记录最佳op
+          gene.append((PRIMITIVES[k_best], j)) #第j条path，最佳op为PRIMITIVES[k_best]
+        start = end # 进行下一个Node，在W中所有Node的输入path按顺序排好了
+        n += 1 # 对于下一个Node，输入Node增加一个
+      return gene #注意返回的格式，可参考genotypes.py中的格式
 
     gene_normal = _parse(F.softmax(self.alphas_normal, dim=-1).data.cpu().numpy())
     gene_reduce = _parse(F.softmax(self.alphas_reduce, dim=-1).data.cpu().numpy())
 
-    concat = range(2+self._steps-self._multiplier, self._steps+2)
+    concat = range(2+self._steps-self._multiplier, self._steps+2) #确定哪个几个Node的输出相连，作为该cell的输出
     genotype = Genotype(
       normal=gene_normal, normal_concat=concat,
       reduce=gene_reduce, reduce_concat=concat
