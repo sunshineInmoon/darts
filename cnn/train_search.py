@@ -73,7 +73,7 @@ def main():
 
   criterion = nn.CrossEntropyLoss()
   criterion = criterion.cuda()
-  model = Network(args.init_channels, CIFAR_CLASSES, args.layers, criterion)
+  model =  (args.init_channels, CIFAR_CLASSES, args.layers, criterion)
   model = model.cuda()
   logging.info("param size = %fMB", utils.count_parameters_in_MB(model))
 
@@ -103,7 +103,7 @@ def main():
   scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, float(args.epochs), eta_min=args.learning_rate_min)
 
-  architect = Architect(model, args)
+  architect = Architect(model, args) #为了更新网络的结构参数
 
   for epoch in range(args.epochs):
     scheduler.step()
@@ -117,7 +117,7 @@ def main():
     print(F.softmax(model.alphas_reduce, dim=-1))
 
     # training
-    train_acc, train_obj = train(train_queue, valid_queue, model, architect, criterion, optimizer, lr)
+    train_acc, train_obj = train(train_queue, valid_queue, model, architect, criterion, optimizer, lr) #训练网络包括网络权重和结构参数
     logging.info('train_acc %f', train_acc)
 
     # validation
@@ -144,14 +144,15 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr):
     input_search = Variable(input_search, requires_grad=False).cuda()
     target_search = Variable(target_search, requires_grad=False).cuda(async=True)
 
-    architect.step(input, target, input_search, target_search, lr, optimizer, unrolled=args.unrolled)
-
+    architect.step(input, target, input_search, target_search, lr, optimizer, unrolled=args.unrolled) #更新一次结构参数
+    
+    #更新网络权重
     optimizer.zero_grad()
     logits = model(input)
     loss = criterion(logits, target)
 
     loss.backward()
-    nn.utils.clip_grad_norm(model.parameters(), args.grad_clip)
+    nn.utils.clip_grad_norm(model.parameters(), args.grad_clip) #pytorch自带函数，规范化梯度模长
     optimizer.step()
 
     prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))
