@@ -14,10 +14,10 @@ class Architect(object):
     self.network_momentum = args.momentum
     self.network_weight_decay = args.weight_decay
     self.model = model
-    self.optimizer = torch.optim.Adam(self.model.arch_parameters(),
+    self.optimizer = torch.optim.Adam(self.model.arch_parameters(), #注意需要优化的参数
         lr=args.arch_learning_rate, betas=(0.5, 0.999), weight_decay=args.arch_weight_decay)
 
-  def _compute_unrolled_model(self, input, target, eta, network_optimizer):
+  def _compute_unrolled_model(self, input, target, eta, network_optimizer): #unrolled展开
     loss = self.model._loss(input, target)
     theta = _concat(self.model.parameters()).data
     try:
@@ -28,15 +28,16 @@ class Architect(object):
     unrolled_model = self._construct_model_from_theta(theta.sub(eta, moment+dtheta))
     return unrolled_model
 
-  def step(self, input_train, target_train, input_valid, target_valid, eta, network_optimizer, unrolled):
+  def step(self, input_train, target_train, input_valid, target_valid, eta, network_optimizer, unrolled): #eta是lr，network_optimizer训练时的优化器
     self.optimizer.zero_grad()
     if unrolled:
         self._backward_step_unrolled(input_train, target_train, input_valid, target_valid, eta, network_optimizer)
     else:
-        self._backward_step(input_valid, target_valid)
+        self._backward_step(input_valid, target_valid) 
+        # 更新网络的结构参数，为什么说是更新结构参数，主要看调用了哪个optimizer，从上下文可以看出调用的self.optimizer,这是针对结构参数的优化器
     self.optimizer.step()
 
-  def _backward_step(self, input_valid, target_valid):
+  def _backward_step(self, input_valid, target_valid): #利用验证集更新网络的结构参数
     loss = self.model._loss(input_valid, target_valid)
     loss.backward()
 
