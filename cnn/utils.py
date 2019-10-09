@@ -23,11 +23,11 @@ class AvgrageMeter(object):
 
 
 def accuracy(output, target, topk=(1,)):
-  maxk = max(topk)
+  maxk = max(topk) # topk=(1,5),因此maxk=5
   batch_size = target.size(0)
 
-  _, pred = output.topk(maxk, 1, True, True)
-  pred = pred.t()
+  _, pred = output.topk(maxk, 1, True, True) #pred是索引，维度N*5
+  pred = pred.t() #转置，维度5*N
   correct = pred.eq(target.view(1, -1).expand_as(pred))
 
   res = []
@@ -103,7 +103,7 @@ def drop_path(x, drop_prob):
   if drop_prob > 0.:
     keep_prob = 1.-drop_prob
     mask = Variable(torch.cuda.FloatTensor(x.size(0), 1, 1, 1).bernoulli_(keep_prob))
-    x.div_(keep_prob)
+    x.div_(keep_prob) #这里为什么会有一个除法呢？
     x.mul_(mask)
   return x
 
