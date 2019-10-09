@@ -88,9 +88,9 @@ class Zero(nn.Module):
 
 
 class FactorizedReduce(nn.Module): #分解降维
-  ‘’‘
+  '''
   将输入分成两支，每一支输出的Channels是最终我们想要的1/2,然后再将两者cat起来。
-  ’‘’
+  '''
 
   def __init__(self, C_in, C_out, affine=True):
     super(FactorizedReduce, self).__init__()
